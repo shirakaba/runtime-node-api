@@ -7,10 +7,20 @@ Deno.chdir(new URL("./", import.meta.url));
 
 // Process arguments and environment variables
 
-const VALID_PLATFORMS = ["macos", "ios", "ios-sim", "ios-universal"];
+const VALID_PLATFORMS = [
+  "macos",
+  "ios",
+  "ios-sim",
+  "tvos",
+  "tvos-sim",
+  "ios-universal",
+] as const;
+type ValidPlatform = (typeof VALID_PLATFORMS)[number];
+type PlatformDir = "ios" | "macos" | "tvos";
+
 const targetPlatform = Deno.args[0] ?? "macos";
 
-if (!VALID_PLATFORMS.includes(targetPlatform)) {
+if (!isValidPlatform(targetPlatform)) {
   throw new Error(
     `Invalid platform: ${targetPlatform}. Valid platforms are: ${VALID_PLATFORMS.join(
       ", "
@@ -18,13 +28,19 @@ if (!VALID_PLATFORMS.includes(targetPlatform)) {
   );
 }
 
-const platformDir = targetPlatform.startsWith("ios") ? "ios" : "macos";
 const buildConfig = Deno.args.includes("debug") ? "Debug" : "Release";
 
-// Ensure we have a build directory
-await Deno.mkdir(`../packages/${platformDir}/build`).catch(() => {});
+function isValidPlatform(platform: string): platform is ValidPlatform {
+  return VALID_PLATFORMS.includes(platform as ValidPlatform);
+}
 
-async function ensureTargetDir(targetPlatform: string) {
+async function ensureTargetDir({
+  platformDir,
+  targetPlatform,
+}: {
+  platformDir: PlatformDir;
+  targetPlatform: ValidPlatform;
+}) {
   // Clean any previous target specific build
   // await Deno.remove(`../packages/${platformDir}/build/${targetPlatform}`, { recursive: true }).catch(
   //   () => {},
@@ -35,15 +51,23 @@ async function ensureTargetDir(targetPlatform: string) {
   );
 }
 
-const archs: Record<string, string[]> = {
+const archs: Record<ValidPlatform, string[]> = {
   ios: ["arm64"],
-  "ios-universal": ["arm64", "x86_64"],
   "ios-sim": ["arm64", "x86_64"],
+  tvos: ["arm64"],
+  "tvos-sim": ["arm64", "x86_64"],
+  "ios-universal": ["arm64", "x86_64"],
   macos: ["x86_64", "arm64"],
 };
 
-async function build(targetPlatform: string) {
-  await ensureTargetDir(targetPlatform);
+async function build({
+  platformDir,
+  targetPlatform,
+}: {
+  platformDir: PlatformDir;
+  targetPlatform: ValidPlatform;
+}) {
+  await ensureTargetDir({ platformDir, targetPlatform });
 
   const maxMDSize = Math.max(
     ...archs[targetPlatform].map((arch) => {
@@ -76,36 +100,52 @@ async function build(targetPlatform: string) {
   }
 }
 
-const TARGET_RELEASE_FOLDERS: Record<string, string> = {
+const TARGET_RELEASE_FOLDERS: Record<
+  Exclude<ValidPlatform, "macos" | "ios-universal">,
+  string
+> = {
   ios: `${buildConfig}-iphoneos`,
   "ios-sim": `${buildConfig}-iphonesimulator`,
-};
+  tvos: `${buildConfig}-appletvos`,
+  "tvos-sim": `${buildConfig}-appletvsimulator`,
+} as const;
 
 if (import.meta.main) {
   if (targetPlatform === "ios-universal") {
-    await ensureTargetDir(targetPlatform);
+    const targets: Array<{
+      platformDir: PlatformDir;
+      targetPlatforms: Array<Exclude<ValidPlatform, "macos" | "ios-universal">>;
+    }> = [
+      { platformDir: "ios", targetPlatforms: ["ios", "ios-sim"] },
+      { platformDir: "tvos", targetPlatforms: ["tvos", "tvos-sim"] },
+    ];
 
-    const targets = ["ios", "ios-sim"];
-    for (const target of targets) {
-      await build(target);
+    for (const { platformDir, targetPlatforms } of targets) {
+      // Ensure we have a build directory
+      await Deno.mkdir(`../packages/${platformDir}/build`).catch(() => {});
+
+      for (const targetPlatform of targetPlatforms) {
+        await ensureTargetDir({ platformDir, targetPlatform });
+        await build({ platformDir, targetPlatform });
+
+        await Deno.mkdir(`../packages/${platformDir}/dist`, {
+          recursive: true,
+        }).catch(() => {});
+
+        await Deno.remove(
+          `../packages/${platformDir}/dist/${targetPlatform}/NativeScript.xcframework`,
+          { recursive: true }
+        ).catch(() => {});
+
+        await $`xcodebuild -create-xcframework ${targetPlatforms
+          .map((targetPlatform) => [
+            `-framework`,
+            `../packages/${platformDir}/build/${targetPlatform}/${TARGET_RELEASE_FOLDERS[targetPlatform]}/NativeScript.framework`,
+          ])
+          .flat()} -output ../packages/${platformDir}/dist/${targetPlatform}/NativeScript.xcframework`;
+      }
     }
-
-    await Deno.mkdir(`../packages/${platformDir}/dist`, {
-      recursive: true,
-    }).catch(() => {});
-
-    await Deno.remove(
-      `../packages/${platformDir}/dist/${targetPlatform}/NativeScript.xcframework`,
-      { recursive: true }
-    ).catch(() => {});
-
-    await $`xcodebuild -create-xcframework ${targets
-      .map((targetPlatform) => [
-        `-framework`,
-        `../packages/${platformDir}/build/${targetPlatform}/${TARGET_RELEASE_FOLDERS[targetPlatform]}/NativeScript.framework`,
-      ])
-      .flat()} -output ../packages/${platformDir}/dist/${targetPlatform}/NativeScript.xcframework`;
   } else {
-    await build(targetPlatform);
+    await build({ platformDir: "macos", targetPlatform });
   }
 }

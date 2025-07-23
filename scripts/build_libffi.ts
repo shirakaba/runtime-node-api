@@ -14,7 +14,7 @@ if (
   !Deno.env.get("SKIP_GENERATE_SOURCE") &&
   !Deno.args.includes("--skip-generate-source")
 ) {
-  for (const platform of ["ios", "osx"]) {
+  for (const platform of ["ios", "tvos", "osx"]) {
     await $`python generate-darwin-source-and-headers.py --only-${platform}`;
   }
 }
@@ -24,6 +24,9 @@ for (
     "iphoneos-arm64",
     "iphonesimulator-x86_64",
     "iphonesimulator-arm64",
+    "appletvos-arm64",
+    "appletvsimulator-x86_64",
+    "appletvsimulator-arm64",
     "macosx-x86_64",
     "macosx-arm64",
   ]
@@ -53,6 +56,28 @@ await Deno.copyFile(
   "prebuilt/iphoneos-arm64/libffi.a",
 );
 
+// tvOS
+
+await Deno.remove("prebuilt/appletvos-arm64", { recursive: true }).catch(
+  () => {},
+);
+await Deno.mkdir("prebuilt/appletvos-arm64/include", { recursive: true });
+
+await Deno.copyFile(
+  "build_appletvos-arm64/include/ffi.h",
+  "prebuilt/appletvos-arm64/include/ffi.h",
+);
+
+await Deno.copyFile(
+  "build_appletvos-arm64/include/ffitarget.h",
+  "prebuilt/appletvos-arm64/include/ffitarget.h",
+);
+
+await Deno.copyFile(
+  "build_appletvos-arm64/.libs/libffi_convenience.a",
+  "prebuilt/appletvos-arm64/libffi.a",
+);
+
 // macOS
 
 await Deno.remove("prebuilt/macosx-universal", { recursive: true }).catch(
@@ -77,6 +102,20 @@ await Deno.mkdir("prebuilt/iphonesimulator-universal/include", {
 await $`lipo -create -output prebuilt/iphonesimulator-universal/libffi.a build_iphonesimulator-x86_64/.libs/libffi_convenience.a build_iphonesimulator-arm64/.libs/libffi_convenience.a`;
 
 await combineHeaders("iphonesimulator");
+
+// tvOS Simulator
+
+await Deno.remove("prebuilt/appletvsimulator-universal", { recursive: true })
+  .catch(
+    () => {},
+  );
+await Deno.mkdir("prebuilt/appletvsimulator-universal/include", {
+  recursive: true,
+});
+
+await $`lipo -create -output prebuilt/appletvsimulator-universal/libffi.a build_appletvsimulator-x86_64/.libs/libffi_convenience.a build_appletvsimulator-arm64/.libs/libffi_convenience.a`;
+
+await combineHeaders("appletvsimulator");
 
 // Utility
 

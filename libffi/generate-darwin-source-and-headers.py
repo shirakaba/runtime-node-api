@@ -229,10 +229,14 @@ def build_target(platform, platform_headers):
     working_dir = os.getcwd()
     try:
         os.chdir(build_dir)
+        prefix_dir = os.path.abspath(os.path.join("..", "prefix", tag))
+        mkdir_p(prefix_dir)
+
         subprocess.check_call(
             [
                 "../configure",
-                "--host=" + platform.target
+                "--host=" + platform.target,
+                "--prefix=" + prefix_dir
             ] + (
                 [] if platform.sdk == "macosx" else ["--build=" + os.uname()[4] + "-apple-darwin"]
             ),
@@ -258,15 +262,17 @@ def generate_source_and_headers(
     generate_ios=True,
     generate_tvos=True,
     generate_watchos=True,
+    build_legacy_archs=False,
 ):
     copy_files('src', 'darwin_common/src', pattern='*.c')
     copy_files('include', 'darwin_common/include', pattern='*.h')
 
     if generate_ios:
-        copy_src_platform_files(ios_simulator_i386_platform)
+        if build_legacy_archs:
+            copy_src_platform_files(ios_simulator_i386_platform)
+            copy_src_platform_files(ios_device_armv7_platform)
         copy_src_platform_files(ios_simulator_x86_64_platform)
         copy_src_platform_files(ios_simulator_arm64_platform)
-        copy_src_platform_files(ios_device_armv7_platform)
         copy_src_platform_files(ios_device_arm64_platform)
     if generate_osx:
         copy_src_platform_files(desktop_x86_64_platform)
@@ -285,10 +291,11 @@ def generate_source_and_headers(
     platform_headers = collections.defaultdict(set)
 
     if generate_ios:
-        build_target(ios_simulator_i386_platform, platform_headers)
+        if build_legacy_archs:
+            build_target(ios_simulator_i386_platform, platform_headers)
+            build_target(ios_device_armv7_platform, platform_headers)
         build_target(ios_simulator_x86_64_platform, platform_headers)
         build_target(ios_simulator_arm64_platform, platform_headers)
-        build_target(ios_device_armv7_platform, platform_headers)
         build_target(ios_device_arm64_platform, platform_headers)
     if generate_osx:
         build_target(desktop_x86_64_platform, platform_headers)

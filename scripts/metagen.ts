@@ -48,6 +48,8 @@ const MACOS_FRAMEWORKS = ["AppKit", "CoreAudio", "ScreenCaptureKit"];
 
 const IOS_FRAMEWORKS = ["UIKit"];
 
+const TVOS_FRAMEWORKS = ["UIKit"];
+
 interface SDK {
   path: string;
   frameworks: string[];
@@ -90,6 +92,22 @@ const sdks: Record<string, SDK> = {
     targets: {
       x86_64: "x86_64-apple-ios13.0-simulator",
       arm64: "arm64-apple-ios13.0-simulator",
+    },
+  },
+  tvos: {
+    path: getSDKPath("appletvos"),
+    frameworks: [...COMMON_FRAMEWORKS, ...TVOS_FRAMEWORKS],
+    targets: {
+      x86_64: "x86_64-apple-tvos13.0",
+      arm64: "arm64-apple-tvos13.0",
+    },
+  },
+  "tvos-sim": {
+    path: getSDKPath("appletvsimulator"),
+    frameworks: [...COMMON_FRAMEWORKS, ...TVOS_FRAMEWORKS],
+    targets: {
+      x86_64: "x86_64-apple-tvos13.0-simulator",
+      arm64: "arm64-apple-tvos13.0-simulator",
     },
   },
 };
